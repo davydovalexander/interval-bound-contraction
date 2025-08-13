@@ -1,7 +1,9 @@
 import torch
 import torch.optim as optim
+import numpy as np
+import matplotlib.pyplot as plt
 
-from dynamics import pendulum_jac_bounds, pendulum_control_matrix
+from dynamics import pendulum_jac_bounds, pendulum_control_matrix, pendulum_f
 from nn_controller import NN_IBP
 
 from utils import compute_metzler_upper_bound, partition_hyperrectangle
@@ -14,14 +16,14 @@ if __name__ == '__main__':
     learning_rate = 1e-2
     num_epochs = 100000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    xunder = -0.01*torch.ones(2)
+    xunder = torch.tensor([-torch.pi/5, -0.2])
     eye = torch.eye(3).to(device=device)
-    xover = 0.01*torch.ones(2)
+    xover = -xunder
 
-    xunder, xover = partition_hyperrectangle(xunder, xover, 1**2)
+    xunder, xover = partition_hyperrectangle(xunder, xover, 5**2)
 
     # --- Send model to device ---
-    model = NN_IBP(input_dim = 2, hidden_dims=[32,32], trainable_NCM=True)
+    model = NN_IBP(input_dim = 2, hidden_dims=[64,64], trainable_NCM=True)
     model = model.to(device)
 
     B = pendulum_control_matrix()
@@ -63,6 +65,7 @@ if __name__ == '__main__':
 
         if loss <= 1e-7:
             print('At epoch ', epoch+1, ' loss has hit 0, valid closed-loop contracting controller')
+            torch.save(model.state_dict(), 'inverted_pendulum.pth')
             break
 
         optimizer.zero_grad()
@@ -79,3 +82,21 @@ if __name__ == '__main__':
             
 
     print('contraction metric', model.constant_NCM())
+
+T = 100000
+dt = 0.01
+
+xs = torch.zeros((2, T))
+x = xs[:,0] + torch.tensor([torch.pi/6, 0.0])
+zero = torch.zeros_like(x)
+print(x.size)
+print(model(x))
+print(pendulum_f(x))
+for i in range(T):
+    x += dt * (pendulum_f(x).squeeze() + pendulum_control_matrix() @ (model(x) - model(zero))) 
+    xs[:,i] = x
+
+print(xs[:,-1])
+
+plt.plot(xs[0,:].detach().numpy())
+plt.show()

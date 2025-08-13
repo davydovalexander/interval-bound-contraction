@@ -106,7 +106,7 @@ def pendulum_Df(x):
     J[:, 0, 0] = 0.
     J[:, 0, 1] = 1.
 
-    J[:, 1, 0] = -g/l * torch.cos(x[:, 0])
+    J[:, 1, 0] = g/l * torch.cos(x[:, 0])
     J[:, 1, 1] = 0
 
     return J
@@ -132,17 +132,17 @@ def pendulum_jac_bounds(l, u):
     # Constant entries
     lower[:, 0, 0] = 0.
     lower[:, 0, 1] = 1
-    lower[:, 1, 1] = -0.1
+    lower[:, 1, 1] = 0.
     
     upper[:, 0, 0] = 0
     upper[:, 0, 1] = 1
-    upper[:, 1, 1] = -0.1
+    upper[:, 1, 1] = 0.
     
     # Fill in l/u dependent entries
-    lower[:, 1, 0] = -g/ell
-    upper[:, 1, 0] = g/ell*torch.maximum(torch.cos(l[:,0]), torch.cos(u[:,0]))
-    #lower[:, 1, 0] = -g/ell*torch.maximum(torch.cos(l[:,0]), torch.cos(u[:,0]))
-    #upper[:, 1, 0] = g/ell
+    # lower[:, 1, 0] = -g/ell
+    # upper[:, 1, 0] = g/ell*torch.maximum(-torch.cos(l[:,0]), -torch.cos(u[:,0]))
+    lower[:, 1, 0] = g/ell*torch.minimum(torch.cos(l[:,0]), torch.cos(u[:,0]))
+    upper[:, 1, 0] = g/ell
     
     return (lower, upper)
 
