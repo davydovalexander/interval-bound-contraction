@@ -84,6 +84,29 @@ def pendulum_f(x):
     l = 1.
     return torch.tensor([[x[1]], [g/l * torch.sin(x[0])]])
 
+def pendulum_f_bounds(l, u):
+    g = 10.
+    ell = 1.
+    # Ensure batching
+    if l.ndim == 1:
+        l = l.unsqueeze(0)
+        u = u.unsqueeze(0)
+    
+    b = l.shape[0]
+    device = l.device
+    dtype = l.dtype
+    
+    lower = torch.zeros((b, 2), device=device, dtype=dtype)
+    upper = torch.zeros((b, 2), device=device, dtype=dtype)
+
+    lower[:, 0] = l[:, 1]
+    upper[:, 0] = u[:, 1]
+
+    lower[:, 1] = g/ell * torch.sin(l[:, 0])
+    upper[:, 1] = g/ell * torch.sin(u[:, 0])
+
+    return (lower, upper)
+
 def pendulum_Df(x):
     """
     Jacobian of pendulum vector field for batched input.

@@ -33,6 +33,45 @@ class NN_IBP(nn.Module):
             x = act(layer(x))
         return self.output_layer(x)
 
+    def IBP_forward(self, lower, upper, ellision_matrix = None):
+        """
+        Interval Bound Propagation forward pass.
+        Args:
+            lower (tensor): shape (batch, in_dim)
+            upper (tensor): shape (batch, in_dim)
+        Returns:
+            lower_out, upper_out (tensors): shape (batch, out_dim)
+        """
+        # Pass through hidden layers
+        for layer, act in zip(self.hidden_layers, self.activations):
+            W = layer.weight
+            b = layer.bias
+
+            W_pos = torch.clamp(W, min=0)
+            W_neg = torch.clamp(W, max=0)
+
+            # Linear transformation
+            lower_new = lower @ W_pos.T + upper @ W_neg.T + b
+            upper_new = upper @ W_pos.T + lower @ W_neg.T + b
+
+            # Activation (monotonic)
+            lower = act(lower_new)
+            upper = act(upper_new)
+
+        # Output layer (no activation here, but same bound logic)
+        W = self.output_layer.weight.clone()
+        b = self.output_layer.bias
+        if ellision_matrix is not None:
+            W = ellision_matrix @ W
+
+        W_pos = torch.clamp(W, min=0)
+        W_neg = torch.clamp(W, max=0)
+
+        lower_out = lower @ W_pos.T + upper @ W_neg.T + b
+        upper_out = upper @ W_pos.T + lower @ W_neg.T + b
+
+        return lower_out, upper_out
+
     def get_hidden_pre_activation_bounds(self, x_lower, x_upper):
         """
         Compute pre-activation interval bounds for each hidden layer.
