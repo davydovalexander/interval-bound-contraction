@@ -15,9 +15,9 @@ if __name__ == '__main__':
         # --- Hyperparameters ---
     eps = 1e-8
     learning_rate = 1e-2
-    num_epochs = 100000
+    num_epochs = 20000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    xunder = torch.tensor([-torch.pi/3, -0.5])
+    xunder = torch.tensor([-torch.pi/5, -0.2])
     eye = torch.eye(3).to(device=device)
     xover = -xunder
 
@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     # --- Send model to device ---
     model = NN_IBP(input_dim = 2, hidden_dims=[64,64], trainable_NCM=False)
-    ncm_model = NCM_NN(d = 2, eps = 0.1)
+    ncm_model = NCM_NN(d = 2, hidden_sizes=[32], eps = 0.1)
     model = model.to(device)
     ncm_model = ncm_model.to(device)
 
@@ -40,23 +40,31 @@ if __name__ == '__main__':
         # ---- Training ----
         model.train()
         # Check this function for bugs
-        M_bounds = ncm_model.output_bounds(xunder, xover)
-        Du_bounds = model.compute_Du_bounds(xunder, xover, elision_matrix=B)
-        M_times_Du_bounds = multiply_two_interval_matrices(*M_bounds, *Du_bounds)
+        M_lower, M_upper = ncm_model.output_bounds(xunder, xover)
+        Du_lower, Du_upper = model.compute_Du_bounds(xunder, xover, elision_matrix=B)
+        M_times_Du_bounds = multiply_two_interval_matrices(M_lower,
+                                                           M_upper,
+                                                            Du_lower,
+                                                            Du_upper)
 
         #print(Du_bounds[0].shape)
         Df_lower, Df_upper = pendulum_jac_bounds(xunder, xover)
-        M_times_Df_bounds = multiply_two_interval_matrices(*M_bounds, Df_lower, Df_upper)
+        M_times_Df_bounds = multiply_two_interval_matrices(M_lower,
+                                                           M_upper,
+                                                        Df_lower, 
+                                                        Df_upper)
         #print(Df_bounds[0].shape)
         # eigenbounds = max_eig_over_hyperrectangles(Df, xunder, xover, NCM)
-        grad_M_bounds = ncm_model.grad_M_bounds(xunder, xover)
-        f_bounds = pendulum_f_bounds(xunder, xover)
-        Mdot_f_bounds = bound_Mdot(*grad_M_bounds, *f_bounds)
+        grad_M_lower, grad_M_upper = ncm_model.grad_M_bounds(xunder, xover)
+        f_lower, f_upper = pendulum_f_bounds(xunder, xover)
+        Mdot_f_bounds = bound_Mdot(grad_M_lower, grad_M_upper, f_lower, f_upper)
         Bu_lower, Bu_upper = model.IBP_forward(xunder, xover, ellision_matrix=B)
-        Mdot_Bu_bounds = bound_Mdot(*grad_M_bounds, Bu_lower, Bu_upper)
+        Bu_lower = Bu_lower - B @ model(torch.zeros(2))
+        Bu_upper = Bu_upper - B @ model(torch.zeros(2))
+        Mdot_Bu_bounds = bound_Mdot(grad_M_lower, grad_M_upper, Bu_lower, Bu_upper)
 
-        B_Mzr = compute_metzler_nonconstant_NCM((Df_lower, Df_upper), 
-                                                Du_bounds,
+        B_Mzr = compute_metzler_nonconstant_NCM(M_times_Df_bounds, 
+                                                M_times_Du_bounds,
                                                 Mdot_f_bounds,
                                                 Mdot_Bu_bounds)
         # B_Mzr = compute_metzler_upper_bound_new(eigenbounds, Du_bounds)
@@ -80,7 +88,6 @@ if __name__ == '__main__':
 
         if loss <= 1e-7:
             print('At epoch ', epoch+1, ' loss has hit 0, valid closed-loop contracting controller')
-            # torch.save(model.state_dict(), 'inverted_pendulum.pth')
             break
 
         optimizer.zero_grad()
@@ -95,3 +102,7 @@ if __name__ == '__main__':
             print(f"Epoch [{epoch+1}/{num_epochs}] "
                 f"Loss: {loss:.4f} ")
             
+
+    torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
+    torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
+    print('saved models')
