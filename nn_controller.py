@@ -60,9 +60,10 @@ class NN_IBP(nn.Module):
 
         # Output layer (no activation here, but same bound logic)
         W = self.output_layer.weight.clone()
-        b = self.output_layer.bias
+        b = self.output_layer.bias.clone()
         if ellision_matrix is not None:
             W = ellision_matrix @ W
+            b = ellision_matrix @ b
 
         W_pos = torch.clamp(W, min=0)
         W_neg = torch.clamp(W, max=0)

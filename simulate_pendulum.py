@@ -4,16 +4,16 @@ import matplotlib.pyplot as plt
 
 from dynamics import pendulum_f, pendulum_control_matrix
 
-model = NN_IBP(input_dim=2, hidden_dims=[64,64], trainable_NCM=False)
+model = NN_IBP(input_dim=2, hidden_dims=[64,32], trainable_NCM=False)
 
 model.load_state_dict(torch.load('inverted_pendulum_new.pth', weights_only=True))
 model.eval()
 
-T = 500000
+T = 50000
 dt = 0.001
 
 xs = torch.zeros((2, T))
-x = xs[:,0] + torch.tensor([0.2, 0.0])
+x = xs[:,0] + torch.tensor([1.4, 1.5])
 zero = torch.zeros_like(x)
 
 print(model(x) -model(zero))

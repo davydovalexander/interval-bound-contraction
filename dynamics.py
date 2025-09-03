@@ -102,8 +102,25 @@ def pendulum_f_bounds(l, u):
     lower[:, 0] = l[:, 1]
     upper[:, 0] = u[:, 1]
 
-    lower[:, 1] = g/ell * torch.sin(l[:, 0])
-    upper[:, 1] = g/ell * torch.sin(u[:, 0])
+    lower[:, 1] = torch.where(
+        l[:, 0] < -torch.pi / 2,
+        -g / ell,
+        torch.where(
+            (l[:, 0] >= -torch.pi / 2) & (l[:, 0] < 0),
+            lower[:, 1],  # unchanged
+            g / ell * torch.sin(l[:, 0])
+        )
+    )
+    upper[:, 1] = torch.where(
+        u[:, 0] > torch.pi / 2,
+        g / ell,
+        torch.where(
+            (u[:, 0] <= torch.pi / 2) & (u[:, 0] > 0),
+            upper[:, 1],  # unchanged
+            g / ell * torch.sin(u[:, 0])
+        )
+    )
+    # upper[:, 1] = g/ell * torch.sin(u[:, 0])
 
     return (lower, upper)
 

@@ -3,7 +3,7 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ncm import NCM_NN
+from ncm import NCM_NN, NCM_NN_triangular
 from dynamics import pendulum_jac_bounds, pendulum_control_matrix, pendulum_f_bounds
 from nn_controller import NN_IBP
 
@@ -14,18 +14,18 @@ from utils import compute_metzler_nonconstant_NCM, partition_hyperrectangle, mul
 if __name__ == '__main__':
         # --- Hyperparameters ---
     eps = 1e-8
-    learning_rate = 1e-2
-    num_epochs = 20000
+    learning_rate = 1e-3
+    num_epochs = 100000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    xunder = torch.tensor([-torch.pi/5, -0.2])
+    xunder = torch.tensor([-torch.pi/2, -2])
     eye = torch.eye(3).to(device=device)
     xover = -xunder
 
-    xunder, xover = partition_hyperrectangle(xunder, xover, 10**2)
+    xunder, xover = partition_hyperrectangle(xunder, xover, 11**2)
 
     # --- Send model to device ---
     model = NN_IBP(input_dim = 2, hidden_dims=[64,64], trainable_NCM=False)
-    ncm_model = NCM_NN(d = 2, hidden_sizes=[32], eps = 0.1)
+    ncm_model = NCM_NN_triangular(d = 2, hidden_sizes=[64], eps = 0.1)
     model = model.to(device)
     ncm_model = ncm_model.to(device)
 
@@ -59,8 +59,8 @@ if __name__ == '__main__':
         f_lower, f_upper = pendulum_f_bounds(xunder, xover)
         Mdot_f_bounds = bound_Mdot(grad_M_lower, grad_M_upper, f_lower, f_upper)
         Bu_lower, Bu_upper = model.IBP_forward(xunder, xover, ellision_matrix=B)
-        Bu_lower = Bu_lower - B @ model(torch.zeros(2))
-        Bu_upper = Bu_upper - B @ model(torch.zeros(2))
+        Bu_lower = Bu_lower - B @ model(torch.zeros(2)) # Enforcing that u(0) = 0
+        Bu_upper = Bu_upper - B @ model(torch.zeros(2)) # Enforcing that u(0) = 0
         Mdot_Bu_bounds = bound_Mdot(grad_M_lower, grad_M_upper, Bu_lower, Bu_upper)
 
         B_Mzr = compute_metzler_nonconstant_NCM(M_times_Df_bounds, 
@@ -77,16 +77,17 @@ if __name__ == '__main__':
             print(B_Mzr[0])
             
             break
-        max_eig = eigs.amax(dim=tuple(range(1, eigs.ndim)))
-        # max_eig = max_eig_metzler_shifted(B_Mzr)
-        # max_eig = B_Mzr.sum(dim=-1)
+        # max_eig = eigs.amax(dim=tuple(range(1, eigs.ndim)))
         # print(max_eig)
-        loss = torch.sum(torch.relu(max_eig))
+        # loss = torch.sum(torch.relu(max_eig))
+        loss = torch.sum(torch.relu(eigs))
         if torch.isnan(loss):
             print('NaN detected in loss')
             break
 
         if loss <= 1e-7:
+            torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
+            torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
             print('At epoch ', epoch+1, ' loss has hit 0, valid closed-loop contracting controller')
             break
 
@@ -103,6 +104,6 @@ if __name__ == '__main__':
                 f"Loss: {loss:.4f} ")
             
 
-    torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
-    torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
-    print('saved models')
+    # torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
+    # torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
+    # print('saved models')
