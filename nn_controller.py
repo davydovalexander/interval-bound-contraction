@@ -2,17 +2,12 @@ import torch
 import torch.nn as nn
 
 class NN_IBP(nn.Module):
-    def __init__(self, input_dim=3, hidden_dims=[16, 16], output_dim=1, activation='softplus', trainable_NCM=False):
+    def __init__(self, input_dim=3, hidden_dims=[16, 16], output_dim=1, activation='softplus'):
         # Make number of layers modular 
         super().__init__()
 
         self.hidden_layers = nn.ModuleList()
         self.activations = nn.ModuleList()
-        if trainable_NCM:
-            self.P = nn.Linear(input_dim, input_dim, bias = False)
-        else:
-            self.P = nn.Linear(input_dim, input_dim, bias = False)
-            self.P.weight.requires_grad = False
 
         dims = [input_dim] + hidden_dims
         for i in range(len(hidden_dims)):
@@ -24,9 +19,6 @@ class NN_IBP(nn.Module):
                 raise ValueError(f"Unsupported activation: {activation}")
 
         self.output_layer = nn.Linear(hidden_dims[-1], output_dim)
-
-    def constant_NCM(self):
-        return self.P.weight @ torch.transpose(self.P.weight, 0, 1) + torch.eye(self.P.weight.shape[-1])
 
     def forward(self, x):
         for layer, act in zip(self.hidden_layers, self.activations):
