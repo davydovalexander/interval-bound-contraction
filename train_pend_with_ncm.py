@@ -3,7 +3,7 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ncm import NCM_NN, NCM_NN_triangular
+from ncm import NCM_NN
 from dynamics import pendulum_jac_bounds, pendulum_control_matrix, pendulum_f_bounds
 from nn_controller import NN_IBP
 
@@ -21,11 +21,11 @@ if __name__ == '__main__':
     eye = torch.eye(3).to(device=device)
     xover = -xunder
 
-    xunder, xover = partition_hyperrectangle(xunder, xover, 11**2)
+    xunder, xover = partition_hyperrectangle(xunder, xover, 16**2)
 
     # --- Send model to device ---
-    model = NN_IBP(input_dim = 2, hidden_dims=[64,64], trainable_NCM=False)
-    ncm_model = NCM_NN_triangular(d = 2, hidden_sizes=[64], eps = 0.1)
+    model = NN_IBP(input_dim = 2, hidden_dims=[128,64])
+    ncm_model = NCM_NN(d = 2, hidden_sizes=[16,16], eps = 0.1, constant_NCM=False)
     model = model.to(device)
     ncm_model = ncm_model.to(device)
 
