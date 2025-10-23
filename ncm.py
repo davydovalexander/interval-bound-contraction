@@ -20,7 +20,7 @@ class NCM_NN(nn.Module):
             # A single linear layer without bias: x-independent
             self.N_layer = nn.Linear(d, d, bias=False)
             # Initialize like before
-            nn.init.kaiming_uniform_(self.N_layer.weight, a=5**0.5)
+            # nn.init.kaiming_uniform_(self.N_layer.weight, a=5**0.5)
         else:
             self.tril_size = d * (d + 1) // 2  # number of lower-triangular entries
 
