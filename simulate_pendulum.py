@@ -42,8 +42,8 @@ t = torch.arange(0, T, dt)
 
 # Random ICs
 N = 20
-thetas = (torch.rand(N) - 0.5) * torch.pi*(75/50)
-thetadots = (torch.rand(N) - 0.5) * 9.0
+thetas = (torch.rand(N) - 0.5) * torch.pi*(80/50)
+thetadots = (torch.rand(N) - 0.5) * 10.0
 inits = torch.stack([thetas, thetadots], dim=1)
 
 # 
@@ -55,8 +55,8 @@ fig, ax = plt.subplots(figsize=(3.5, 2.8))   # ~IEEE column width
 # Compute vector field grid (NO GRAD)
 # 
 with torch.no_grad():
-    theta_min, theta_max = -75*np.pi/100, 75*np.pi/100
-    thetadot_min, thetadot_max = -4.5, 4.5
+    theta_min, theta_max = -80*np.pi/100, 80*np.pi/100
+    thetadot_min, thetadot_max = -5.1, 5.1
 
     n_grid = 30
     theta = torch.linspace(theta_min, theta_max, n_grid)
@@ -105,5 +105,5 @@ ax.set_ylim(thetadot_min, thetadot_max)
 ax.tick_params(axis='both', which='major', length=3, width=0.8)
 
 plt.tight_layout(pad=0.1)
-plt.savefig('pendulum-vector-field-new.pdf', dpi=400, bbox_inches='tight')
+plt.savefig('pendulum-vector-field-newest.pdf', dpi=400, bbox_inches='tight')
 plt.show()
