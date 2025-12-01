@@ -9,23 +9,24 @@ from nn_controller import NN_IBP
 
 from utils import compute_metzler_nonconstant_NCM, partition_hyperrectangle, multiply_two_interval_matrices, bound_Mdot
 
-# Only for polynomial dynamics for now
 
 if __name__ == '__main__':
         # --- Hyperparameters ---
-    eps = 1e-8
-    learning_rate = 1e-3
-    num_epochs = 100000
+    eps = 1e-6
+    learning_rate = 1e-2
+    num_epochs = 20000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    xunder = torch.tensor([-torch.pi/2, -2])
+    xunder_full = torch.tensor([-torch.pi/100, -0.05])
     eye = torch.eye(3).to(device=device)
-    xover = -xunder
+    xover_full = -xunder_full
+    epoch_last_updated = 0
+    domain_part = 16
 
-    xunder, xover = partition_hyperrectangle(xunder, xover, 16**2)
+    xunder, xover = partition_hyperrectangle(xunder_full, xover_full, domain_part**2)
 
     # --- Send model to device ---
-    model = NN_IBP(input_dim = 2, hidden_dims=[128,64])
-    ncm_model = NCM_NN(d = 2, hidden_sizes=[16,16], eps = 0.1, constant_NCM=False)
+    model = NN_IBP(input_dim = 2, hidden_dims=[16,16])
+    ncm_model = NCM_NN(d = 2, hidden_sizes=[32,32], eps = 0.1, constant_NCM=False)
     model = model.to(device)
     ncm_model = ncm_model.to(device)
 
@@ -39,9 +40,11 @@ if __name__ == '__main__':
     for epoch in range(num_epochs):
         # ---- Training ----
         model.train()
+        ncm_model.train()
         # Check this function for bugs
         M_lower, M_upper = ncm_model.output_bounds(xunder, xover)
-        Du_lower, Du_upper = model.compute_Du_bounds(xunder, xover, elision_matrix=B)
+        Du_lower, Du_upper = model.compute_Du_bounds(xunder, xover, elision_matrix=None)
+        Du_lower, Du_upper = multiply_two_interval_matrices(B.unsqueeze(dim=0), B.unsqueeze(dim=0), Du_lower, Du_upper)
         M_times_Du_bounds = multiply_two_interval_matrices(M_lower,
                                                            M_upper,
                                                             Du_lower,
@@ -58,9 +61,12 @@ if __name__ == '__main__':
         grad_M_lower, grad_M_upper = ncm_model.grad_M_bounds(xunder, xover)
         f_lower, f_upper = pendulum_f_bounds(xunder, xover)
         Mdot_f_bounds = bound_Mdot(grad_M_lower, grad_M_upper, f_lower, f_upper)
-        Bu_lower, Bu_upper = model.IBP_forward(xunder, xover, ellision_matrix=B)
-        Bu_lower = Bu_lower - B @ model(torch.zeros(2)) # Enforcing that u(0) = 0
-        Bu_upper = Bu_upper - B @ model(torch.zeros(2)) # Enforcing that u(0) = 0
+        # Bu_lower, Bu_upper = model.IBP_forward(xunder, xover, elision_matrix=B)
+        u_lower, u_upper = model.IBP_forward(xunder, xover, elision_matrix=None)
+        Bu_lower, Bu_upper = multiply_two_interval_matrices(B.unsqueeze(dim=0), B.unsqueeze(dim=0), u_lower, u_upper)
+        u0 = model(torch.zeros(2, device=device))
+        # Bu_lower = Bu_lower - (B.unsqueeze(0) @ u0.unsqueeze(-1))   # check shapes carefully
+        # Bu_upper = Bu_upper - (B.unsqueeze(0) @ u0.unsqueeze(-1))
         Mdot_Bu_bounds = bound_Mdot(grad_M_lower, grad_M_upper, Bu_lower, Bu_upper)
 
         B_Mzr = compute_metzler_nonconstant_NCM(M_times_Df_bounds, 
@@ -86,10 +92,20 @@ if __name__ == '__main__':
             break
 
         if loss <= 1e-7:
-            torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
-            torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
-            print('At epoch ', epoch+1, ' loss has hit 0, valid closed-loop contracting controller')
-            break
+            # torch.save(model.state_dict(), 'inverted_pendulum_bigger.pth')
+            # torch.save(ncm_model.state_dict(), 'inv_pend_ncm_bigger.pth')
+            # print('At epoch ', epoch+1, ' loss has hit 0, valid closed-loop contracting controller')
+            print('At epoch ', epoch+1, ' loss has hit 0, increasing domain')
+            shift = torch.tensor([torch.pi/100, 0.06], device=xunder.device, dtype=xunder.dtype)
+
+            xunder_full = xunder_full - shift
+            xover_full = -xunder_full
+
+            xunder, xover = partition_hyperrectangle(xunder_full, xover_full, 16**2)
+
+            print('new xover', xover_full)
+            epoch_last_updated = epoch
+            continue
 
         optimizer.zero_grad()
         loss.backward()
@@ -103,7 +119,12 @@ if __name__ == '__main__':
             print(f"Epoch [{epoch+1}/{num_epochs}] "
                 f"Loss: {loss:.4f} ")
             
+        if epoch - epoch_last_updated >= 2000:
+            print("further partitioning domain")
+            domain_part += 2
+            xunder, xover = partition_hyperrectangle(xunder_full, xover_full, domain_part**2)
+            epoch_last_updated = epoch
 
-    # torch.save(model.state_dict(), 'inverted_pendulum_new.pth')
-    # torch.save(ncm_model.state_dict(), 'inv_pend_ncm.pth')
-    # print('saved models')
+    torch.save(model.state_dict(), 'small.pth')
+    torch.save(ncm_model.state_dict(), 'small_ncm.pth')
+    print('saved models')

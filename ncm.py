@@ -19,8 +19,6 @@ class NCM_NN(nn.Module):
         if constant_NCM:
             # A single linear layer without bias: x-independent
             self.N_layer = nn.Linear(d, d, bias=False)
-            # Initialize like before
-            # nn.init.kaiming_uniform_(self.N_layer.weight, a=5**0.5)
         else:
             self.tril_size = d * (d + 1) // 2  # number of lower-triangular entries
 
@@ -47,7 +45,7 @@ class NCM_NN(nn.Module):
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
 
-    # ---------- Utility: scatter flat → triangular ----------
+    #  Utility: scatter flat to triangular
     def flat_to_tril(self, N_flat: torch.Tensor) -> torch.Tensor:
         if self.constant_NCM:
             raise RuntimeError("flat_to_tril not used when constant_NCM=True")
@@ -56,7 +54,7 @@ class NCM_NN(nn.Module):
         N[:, self.tril_idx[0], self.tril_idx[1]] = N_flat
         return N
 
-    # ---------- Forward ----------
+    # Forward pass
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.constant_NCM:
             # N is constant: ignore x
@@ -70,15 +68,15 @@ class NCM_NN(nn.Module):
             if single:
                 x = x.unsqueeze(0)
 
-            N_flat = self.mlp(x)                           # (B, tril_size)
-            N = self.flat_to_tril(N_flat)                  # (B, d, d)
-            M = torch.matmul(N.transpose(-1, -2), N)       # (B, d, d)
+            N_flat = self.mlp(x)                           # (b, tril_size)
+            N = self.flat_to_tril(N_flat)                  # (b, d, d)
+            M = torch.matmul(N.transpose(-1, -2), N)       # (b, d, d)
             if self.eps != 0.0:
                 I = torch.eye(self.d, device=x.device, dtype=x.dtype).unsqueeze(0)
                 M = M + self.eps * I
             return M.squeeze(0) if single else M
 
-    # ---------- Interval arithmetic helpers ----------
+    # Interval arithmetic helpers
     @staticmethod
     def _ibp_linear(lower, upper, W: torch.Tensor, b: torch.Tensor):
         W_pos = torch.clamp(W, min=0)
@@ -147,7 +145,7 @@ class NCM_NN(nn.Module):
         lower = torch.einsum('kn,bnm->bkm', W_pos, P_lower) + torch.einsum('kn,bnm->bkm', W_neg, P_upper)
         upper = torch.einsum('kn,bnm->bkm', W_pos, P_upper) + torch.einsum('kn,bnm->bkm', W_neg, P_lower)
         return lower, upper
-
+    
     def _jacobian_bounds_of_N_flat(self, l, u):
         preacts, _ = self._preact_bounds_and_N_bounds(l, u)
         diag_bounds = self._diag_bounds_from_preacts(preacts)
@@ -164,7 +162,7 @@ class NCM_NN(nn.Module):
 
         return P_lower, P_upper  # (B, tril_size, d)
 
-    # ---------- Public: interval bounds on M ----------
+    # Interval bounds on M
     def output_bounds(self, l, u):
         if self.constant_NCM:
             N = self.N_layer.weight
@@ -193,10 +191,10 @@ class NCM_NN(nn.Module):
             M_upper = M_upper + self.eps * I
         return M_lower, M_upper
 
-    # ---------- Public: interval bounds on grad_x M_{ij} ----------
+    # interval bounds on nabla M_{ij}
     def grad_M_bounds(self, l, u):
         if self.constant_NCM:
-            # M is constant → gradient is zero
+            # M is constant implies gradient is zero
             B = l.shape[0] if l.ndim > 1 else 1
             grad_lower = torch.zeros(B, self.d, self.d, self.d, device=l.device, dtype=l.dtype)
             grad_upper = torch.zeros_like(grad_lower)

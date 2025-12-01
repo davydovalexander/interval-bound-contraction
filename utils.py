@@ -86,6 +86,7 @@ def compute_metzler_nonconstant_NCM(jac_bounds,
     lmi_upper = (jac_upper + jac_upper_T + Du_upper + Du_upper_T) + Mdot_f_upper + Mdot_Bu_upper
     
     # Elementwise maximum for the Metzler bound
+    assert (lmi_lower <= lmi_upper).all(), "Interval invalid: lmi_lower > lmi_upper"
     mat_abs = torch.maximum(lmi_upper, -lmi_lower)
     
     # Extract diagonals in batched way
